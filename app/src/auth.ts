@@ -30,8 +30,13 @@ function getAuthEndpoint(provider?: string, share?: boolean) {
 export async function login({ credentials, provider, share }: LoginParams): Promise<void> {
 	const response = await api.post<any>(getAuthEndpoint(provider, share), {
 		...credentials,
-		mode: 'session',
+		mode: 'cookie',
 	});
+
+	const accessToken = response.data.data.access_token;
+
+	// Add the header to the API handler for every request
+	api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
 
 	// Refresh the token 10 seconds before the access token expires. This means the user will stay
 	// logged in without any noticeable hiccups or delays
@@ -85,16 +90,16 @@ idleTracker.on('show', () => {
 	}
 });
 
-export async function refresh({ navigate }: LogoutOptions = { navigate: true }): Promise<void> {
-	const appStore = useAppStore();
-
+export async function refresh({ navigate }: LogoutOptions = { navigate: true }): Promise<string | undefined> {
 	// Allow refresh during initial page load
 	if (firstRefresh) firstRefresh = false;
 	// Skip if not logged in
-	else if (!appStore.authenticated) return;
+	else if (!api.defaults.headers.common['Authorization']) return;
 
 	// Prevent concurrent refreshes
 	if (isRefreshing) return;
+
+	const appStore = useAppStore();
 
 	// Skip refresh if access token is still fresh
 	if (appStore.accessTokenExpiry && Date.now() < appStore.accessTokenExpiry - 10000) {
@@ -107,7 +112,18 @@ export async function refresh({ navigate }: LogoutOptions = { navigate: true }):
 	isRefreshing = true;
 
 	try {
-		const response = await api.post<any>('/auth/refresh', { mode: 'session' });
+		const response = await api.post<any>('/auth/refresh', undefined, {
+			transformRequest(data, headers) {
+				// Remove Authorization header from request
+				headers.set('Authorization');
+				return data;
+			},
+		});
+
+		const accessToken = response.data.data.access_token;
+
+		// Add the header to the API handler for every request
+		api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
 
 		// Refresh the token 10 seconds before the access token expires. This means the user will stay
 		// logged in without any notable hiccups or delays
@@ -122,7 +138,7 @@ export async function refresh({ navigate }: LogoutOptions = { navigate: true }):
 		appStore.accessTokenExpiry = Date.now() + response.data.data.expires;
 		appStore.authenticated = true;
 
-		return;
+		return accessToken;
 	} catch (error: any) {
 		await logout({ navigate, reason: LogoutReason.SESSION_EXPIRED });
 	} finally {
@@ -154,6 +170,8 @@ export async function logout(optionsRaw: LogoutOptions = {}): Promise<void> {
 		reason: LogoutReason.SIGN_OUT,
 	};
 
+	delete api.defaults.headers.common['Authorization'];
+
 	clearTimeout(refreshTimeout);
 
 	const options = { ...defaultOptions, ...optionsRaw };
@@ -161,7 +179,7 @@ export async function logout(optionsRaw: LogoutOptions = {}): Promise<void> {
 	// Only if the user manually signed out should we kill the session by hitting the logout endpoint
 	if (options.reason === LogoutReason.SIGN_OUT) {
 		try {
-			await api.post(`/auth/logout`, { mode: 'session' });
+			await api.post(`/auth/logout`);
 		} catch {
 			// User already signed out
 		}
