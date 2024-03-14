@@ -30,7 +30,7 @@ function getAuthEndpoint(provider?: string, share?: boolean) {
 export async function login({ credentials, provider, share }: LoginParams): Promise<void> {
 	const response = await api.post<any>(getAuthEndpoint(provider, share), {
 		...credentials,
-		mode: 'cookie',
+		mode: 'session',
 	});
 
 	// Refresh the token 10 seconds before the access token expires. This means the user will stay
@@ -107,7 +107,7 @@ export async function refresh({ navigate }: LogoutOptions = { navigate: true }):
 	isRefreshing = true;
 
 	try {
-		const response = await api.post<any>('/auth/refresh', { mode: 'cookie' });
+		const response = await api.post<any>('/auth/refresh', { mode: 'session' });
 
 		// Refresh the token 10 seconds before the access token expires. This means the user will stay
 		// logged in without any notable hiccups or delays
@@ -161,7 +161,7 @@ export async function logout(optionsRaw: LogoutOptions = {}): Promise<void> {
 	// Only if the user manually signed out should we kill the session by hitting the logout endpoint
 	if (options.reason === LogoutReason.SIGN_OUT) {
 		try {
-			await api.post(`/auth/logout`, { mode: 'cookie' });
+			await api.post(`/auth/logout`, { mode: 'session' });
 		} catch {
 			// User already signed out
 		}
