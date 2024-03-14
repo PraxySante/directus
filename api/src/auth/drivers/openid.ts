@@ -204,7 +204,7 @@ export class OpenIDAuthDriver extends LocalAuthDriver {
 			external_identifier: identifier,
 
 			// PRAXYSANTE MODIF : Add 6 fields into directus_users table necessary to start efficience
-			psc_access_token : pscAccessToken,
+			psc_access_token: pscAccessToken,
 
 			role: this.config['defaultRoleId'],
 			auth_data: tokenSet.refresh_token && JSON.stringify({ refreshToken: tokenSet.refresh_token }),
@@ -217,7 +217,11 @@ export class OpenIDAuthDriver extends LocalAuthDriver {
 			// user that is about to be updated
 			const updatedUserPayload = await emitter.emitFilter(
 				`auth.update`,
-				{ auth_data: userPayload.auth_data },
+				{
+					auth_data: userPayload.auth_data,
+					// PRAXYSANTE MODIF : Add 1 fields into directus_users table necessary to start efficience
+					psc_access_token: userPayload.psc_access_token,
+				},
 				{
 					identifier,
 					provider: this.config['provider'],
