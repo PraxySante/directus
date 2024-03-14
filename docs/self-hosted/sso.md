@@ -130,7 +130,7 @@ REFRESH_TOKEN_COOKIE_SAME_SITE="None"
      import { createDirectus, authentication } from '@directus/sdk';
 
      const client = createDirectus('https://directus.example.com')
-          .with(authentication('session', { credentials: 'include' }));
+          .with(authentication('cookie', { credentials: 'include' }));
 
      await client.refresh();
      ```

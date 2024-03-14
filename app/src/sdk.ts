@@ -5,7 +5,7 @@ import { getPublicURL } from './utils/get-root-path';
 type SdkClient = DirectusClient<any> & RestClient<any>;
 
 const sdk: SdkClient = createDirectus(getPublicURL())
-	.with(authentication('session', { autoRefresh: false }))
+	.with(authentication('cookie', { autoRefresh: false }))
 	.with(rest());
 
 export default sdk;
