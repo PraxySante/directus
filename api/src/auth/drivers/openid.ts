@@ -185,10 +185,21 @@ export class OpenIDAuthDriver extends LocalAuthDriver {
 		// Fallback to email if explicit identifier not found
 		const identifier = userInfo[identifierKey ?? 'sub'] ? String(userInfo[identifierKey ?? 'sub']) : email;
 
+		// PRAXYSANTE MODIF : Add 5 fields into directus_users table necessary to start efficience
+		const hpInternalId = userInfo['hpInternalId'] ? String(userInfo['hpInternalId']) : undefined;
+		const hpName = userInfo['hpName'] ? String(userInfo['hpName']) : undefined;
+		const hpGiven = userInfo['hpGiven'] ? String(userInfo['hpGiven']) : undefined;
+		const hpProfession = userInfo['hpProfession'] ? String(userInfo['hpProfession']) : undefined;
+		const hpProfessionOid = userInfo['hpProfessionOid'] ? String(userInfo['hpProfessionOid']) : undefined;
+		const hpSpecialty = userInfo['hpProfessionOid'] ? String(userInfo['hpProfessionOid']) : undefined;
+
 		if (!identifier) {
 			logger.warn(`[OpenID] Failed to find user identifier for provider "${provider}"`);
 			throw new InvalidCredentialsError();
 		}
+
+		// PRAXYSANTE MODIF : Print userInfo
+		console.log(userInfo)
 
 		const userPayload = {
 			provider,
@@ -196,6 +207,15 @@ export class OpenIDAuthDriver extends LocalAuthDriver {
 			last_name: userInfo['family_name'],
 			email: email,
 			external_identifier: identifier,
+
+			// PRAXYSANTE MODIF : Add 6 fields into directus_users table necessary to start efficience
+			Hp_internal_id : hpInternalId,
+			Hp_name : hpName,
+			Hp_given : hpGiven,
+			Hp_profession : hpProfession,
+			Hp_profession_o_id : hpProfessionOid,
+			Hp_specialty : hpSpecialty,
+
 			role: this.config['defaultRoleId'],
 			auth_data: tokenSet.refresh_token && JSON.stringify({ refreshToken: tokenSet.refresh_token }),
 		};

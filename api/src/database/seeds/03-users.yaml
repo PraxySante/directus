@@ -14,8 +14,32 @@ columns:
   email:
     type: string
     length: 128
-    nullable: false
-    unique: true
+    
+#   PRAXYSANTE MODIF : EMAIL DOES NOT NEED TO BE UNIQUE
+#   unique: true 
+#   nullable: false
+
+#   PRAXYSANTE MODIF : 6 FIELDS TO RUN EFFICIENCE
+
+  Hp_internal_id:
+    type: string
+    length: 128
+  Hp_name:
+    type: string
+    length: 128
+  Hp_given:
+    type: string
+    length: 128
+  Hp_profession:
+    type: string
+    length: 128
+  Hp_profession_o_id:
+    type: string
+    length: 128
+  Hp_specialty:
+    type: string
+    length: 128
+
   password:
     type: string
     length: 255
