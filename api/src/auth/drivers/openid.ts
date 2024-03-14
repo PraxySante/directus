@@ -164,6 +164,8 @@ export class OpenIDAuthDriver extends LocalAuthDriver {
 				{ code_verifier: payload['codeVerifier'], state: codeChallenge, nonce: codeChallenge },
 			);
 
+			console.log("TokenSet: ", tokenSet)
+
 			userInfo = tokenSet.claims();
 
 			if (client.issuer.metadata['userinfo_endpoint']) {
@@ -186,12 +188,10 @@ export class OpenIDAuthDriver extends LocalAuthDriver {
 		const identifier = userInfo[identifierKey ?? 'sub'] ? String(userInfo[identifierKey ?? 'sub']) : email;
 
 		// PRAXYSANTE MODIF : Add 5 fields into directus_users table necessary to start efficience
-		const hpInternalId = userInfo['hpInternalId'] ? String(userInfo['hpInternalId']) : undefined;
-		const hpName = userInfo['hpName'] ? String(userInfo['hpName']) : undefined;
-		const hpGiven = userInfo['hpGiven'] ? String(userInfo['hpGiven']) : undefined;
-		const hpProfession = userInfo['hpProfession'] ? String(userInfo['hpProfession']) : undefined;
-		const hpProfessionOid = userInfo['hpProfessionOid'] ? String(userInfo['hpProfessionOid']) : undefined;
-		const hpSpecialty = userInfo['hpProfessionOid'] ? String(userInfo['hpProfessionOid']) : undefined;
+		const pscGivenName = userInfo['psc_given_name'] ? String(userInfo['psc_given_name']) : undefined;
+		const pscFamilyName = userInfo['psc_family_name'] ? String(userInfo['psc_family_name']) : undefined;
+		const pscSubjectNameId = userInfo['psc_subject_name_id'] ? String(userInfo['psc_subject_name_id']) : undefined;
+		const pscSubjectRefPro = userInfo['psc_subject_ref_pro'] ? String(userInfo['psc_subject_ref_pro']) : undefined;
 
 		if (!identifier) {
 			logger.warn(`[OpenID] Failed to find user identifier for provider "${provider}"`);
@@ -209,12 +209,10 @@ export class OpenIDAuthDriver extends LocalAuthDriver {
 			external_identifier: identifier,
 
 			// PRAXYSANTE MODIF : Add 6 fields into directus_users table necessary to start efficience
-			Hp_internal_id : hpInternalId,
-			Hp_name : hpName,
-			Hp_given : hpGiven,
-			Hp_profession : hpProfession,
-			Hp_profession_o_id : hpProfessionOid,
-			Hp_specialty : hpSpecialty,
+			psc_given_name : pscGivenName,
+			psc_family_name : pscFamilyName,
+			psc_subject_name_id : pscSubjectNameId,
+			psc_subject_ref_pro : pscSubjectRefPro,
 
 			role: this.config['defaultRoleId'],
 			auth_data: tokenSet.refresh_token && JSON.stringify({ refreshToken: tokenSet.refresh_token }),

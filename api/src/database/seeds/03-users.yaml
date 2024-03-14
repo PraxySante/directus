@@ -19,26 +19,19 @@ columns:
 #   unique: true 
 #   nullable: false
 
-#   PRAXYSANTE MODIF : 6 FIELDS TO RUN EFFICIENCE
+#   PRAXYSANTE MODIF : 4 FIELDS TO RUN EFFICIENCE
 
-  Hp_internal_id:
+  psc_given_name:
     type: string
     length: 128
-  Hp_name:
+  psc_family_name:
     type: string
     length: 128
-  Hp_given:
+  psc_subject_name_id:
     type: string
     length: 128
-  Hp_profession:
-    type: string
-    length: 128
-  Hp_profession_o_id:
-    type: string
-    length: 128
-  Hp_specialty:
-    type: string
-    length: 128
+  psc_subject_ref_pro:
+    type: json
 
   password:
     type: string
