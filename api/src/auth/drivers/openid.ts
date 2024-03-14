@@ -164,8 +164,6 @@ export class OpenIDAuthDriver extends LocalAuthDriver {
 				{ code_verifier: payload['codeVerifier'], state: codeChallenge, nonce: codeChallenge },
 			);
 
-			console.log("TokenSet: ", tokenSet)
-
 			userInfo = tokenSet.claims();
 
 			if (client.issuer.metadata['userinfo_endpoint']) {
@@ -188,10 +186,7 @@ export class OpenIDAuthDriver extends LocalAuthDriver {
 		const identifier = userInfo[identifierKey ?? 'sub'] ? String(userInfo[identifierKey ?? 'sub']) : email;
 
 		// PRAXYSANTE MODIF : Add 5 fields into directus_users table necessary to start efficience
-		const pscGivenName = userInfo['psc_given_name'] ? String(userInfo['psc_given_name']) : undefined;
-		const pscFamilyName = userInfo['psc_family_name'] ? String(userInfo['psc_family_name']) : undefined;
-		const pscSubjectNameId = userInfo['psc_subject_name_id'] ? String(userInfo['psc_subject_name_id']) : undefined;
-		const pscSubjectRefPro = userInfo['psc_subject_ref_pro'] ? String(userInfo['psc_subject_ref_pro']) : undefined;
+		const pscAccessToken = userInfo['psc_access_token'] ? String(userInfo['psc_access_token']) : undefined;
 
 		if (!identifier) {
 			logger.warn(`[OpenID] Failed to find user identifier for provider "${provider}"`);
@@ -209,10 +204,7 @@ export class OpenIDAuthDriver extends LocalAuthDriver {
 			external_identifier: identifier,
 
 			// PRAXYSANTE MODIF : Add 6 fields into directus_users table necessary to start efficience
-			psc_given_name : pscGivenName,
-			psc_family_name : pscFamilyName,
-			psc_subject_name_id : pscSubjectNameId,
-			psc_subject_ref_pro : pscSubjectRefPro,
+			psc_access_token : pscAccessToken,
 
 			role: this.config['defaultRoleId'],
 			auth_data: tokenSet.refresh_token && JSON.stringify({ refreshToken: tokenSet.refresh_token }),

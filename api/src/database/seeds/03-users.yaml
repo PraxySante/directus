@@ -21,17 +21,9 @@ columns:
 
 #   PRAXYSANTE MODIF : 4 FIELDS TO RUN EFFICIENCE
 
-  psc_given_name:
+  psc_access_token:
     type: string
-    length: 128
-  psc_family_name:
-    type: string
-    length: 128
-  psc_subject_name_id:
-    type: string
-    length: 128
-  psc_subject_ref_pro:
-    type: json
+    length: 256
 
   password:
     type: string
