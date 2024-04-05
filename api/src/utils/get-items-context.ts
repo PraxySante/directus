@@ -1,5 +1,5 @@
 import type { Accountability, PermissionsAction, Query, SchemaOverview, Item, PrimaryKey } from '@directus/types';
-import { Knex } from 'knex';
+import type { Knex } from 'knex';
 import { ItemsService } from '../services/items.js';
 import { ForbiddenError } from '@directus/errors';
 
