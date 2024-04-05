@@ -168,7 +168,7 @@ export class PermissionsService extends ItemsService {
 				const checkAction = action === 'update' ? updateAction : action;
 
 				return authorizationService
-					.checkAccess(checkAction, collection, primaryKey)
+					.checkAccess(checkAction, collection, primaryKey??"id")
 					.then(() => (itemPermissions[action].access = true))
 					.catch(() => {});
 			}),
