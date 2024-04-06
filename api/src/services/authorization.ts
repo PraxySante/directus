@@ -28,6 +28,11 @@ import { stripFunction } from '../utils/strip-function.js';
 import { ItemsService } from './items.js';
 import { PayloadService } from './payload.js';
 
+export type PayloadChunk = {
+	keys: PrimaryKey[];
+	payload: Partial<Item>;
+}
+
 export class AuthorizationService {
 	knex: Knex;
 	accountability: Accountability | null;
@@ -478,11 +483,13 @@ export class AuthorizationService {
 	/**
 	 * Checks if the provided payload matches the configured permissions, and adds the presets to the payload.
 	 */
-	validatePayload(action: PermissionsAction, collection: string, data: Partial<Item>): Partial<Item> {
+	validatePayload(action: PermissionsAction, collection: string, data: Partial<Item>, pk?: PrimaryKey | PrimaryKey[]): Partial<Item> {
 		const payload = cloneDeep(data);
 
 		let permission: Permission | undefined;
-
+		
+		pk
+		
 		if (this.accountability?.admin === true) {
 			permission = {
 				id: 0,

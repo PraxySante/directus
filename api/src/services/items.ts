@@ -2,6 +2,7 @@ import { Action } from '@directus/constants';
 import { useEnv } from '@directus/env';
 import { ForbiddenError, InvalidPayloadError } from '@directus/errors';
 import type { Accountability, PermissionsAction, Query, SchemaOverview } from '@directus/types';
+import type { PayloadChunk } from './authorization.js';
 import type Keyv from 'keyv';
 import type { Knex } from 'knex';
 import { assign, clone, cloneDeep, omit, pick, without } from 'lodash-es';
@@ -11,6 +12,8 @@ import { getHelpers } from '../database/helpers/index.js';
 import getDatabase from '../database/index.js';
 import runAST from '../database/run-ast.js';
 import emitter from '../emitter.js';
+
+
 import type {
 	AbstractService,
 	AbstractServiceOptions,
@@ -22,7 +25,6 @@ import type {
 import getASTFromQuery from '../utils/get-ast-from-query.js';
 import { shouldClearCache } from '../utils/should-clear-cache.js';
 import { validateKeys } from '../utils/validate-keys.js';
-import { AuthorizationService } from './authorization.js';
 import { PayloadService } from './payload.js';
 import { isSystemCollection } from '@directus/system-data';
 
@@ -56,6 +58,16 @@ export class ItemsService<Item extends AnyItem = AnyItem> implements AbstractSer
 		this.cache = getCache().cache;
 
 		return this;
+	}
+
+	async getAuthorizationService(database?: Knex) {
+		// Solves the problem of circular dependency
+		const { AuthorizationService } = await import('./authorization.js');
+		return new AuthorizationService({
+			accountability: this.accountability,
+			schema: this.schema,
+			knex: database ?? this.knex,
+		});
 	}
 
 	createMutationTracker(initialCount = 0): MutationTracker {
@@ -127,35 +139,32 @@ export class ItemsService<Item extends AnyItem = AnyItem> implements AbstractSer
 				schema: this.schema,
 			});
 
-			const authorizationService = new AuthorizationService({
-				accountability: this.accountability,
-				knex: trx,
-				schema: this.schema,
-			});
+			// Solves the problem of circular dependency
+			const authorizationService = await this.getAuthorizationService(trx);
 
 			// Run all hooks that are attached to this event so the end user has the chance to augment the
 			// item that is about to be saved
 			const payloadAfterHooks =
 				opts.emitEvents !== false
 					? await emitter.emitFilter(
-							this.eventScope === 'items'
-								? ['items.create', `${this.collection}.items.create`]
-								: `${this.eventScope}.create`,
-							payload,
-							{
-								collection: this.collection,
-							},
-							{
-								database: trx,
-								schema: this.schema,
-								accountability: this.accountability,
-							},
-					  )
+						this.eventScope === 'items'
+							? ['items.create', `${this.collection}.items.create`]
+							: `${this.eventScope}.create`,
+						payload,
+						{
+							collection: this.collection,
+						},
+						{
+							database: trx,
+							schema: this.schema,
+							accountability: this.accountability,
+						},
+					)
 					: payload;
 
 			const payloadWithPresets = this.accountability
-				? authorizationService.validatePayload('create', this.collection, payloadAfterHooks)
-				: payloadAfterHooks;
+				? ((await authorizationService.validatePayload('create', this.collection, payloadAfterHooks)) as PayloadChunk)
+				: { keys: [], payload: payloadAfterHooks };
 
 			if (opts.preMutationError) {
 				throw opts.preMutationError;
@@ -165,7 +174,7 @@ export class ItemsService<Item extends AnyItem = AnyItem> implements AbstractSer
 				payload: payloadWithM2O,
 				revisions: revisionsM2O,
 				nestedActionEvents: nestedActionEventsM2O,
-			} = await payloadService.processM2O(payloadWithPresets, opts);
+			} = await payloadService.processM2O(payloadWithPresets.payload, opts);
 
 			const {
 				payload: payloadWithA2O,
@@ -235,7 +244,7 @@ export class ItemsService<Item extends AnyItem = AnyItem> implements AbstractSer
 			primaryKey = primaryKey as PrimaryKey;
 
 			const { revisions: revisionsO2M, nestedActionEvents: nestedActionEventsO2M } = await payloadService.processO2M(
-				payloadWithPresets,
+				payloadWithPresets.payload,
 				primaryKey,
 				opts,
 			);
@@ -403,19 +412,19 @@ export class ItemsService<Item extends AnyItem = AnyItem> implements AbstractSer
 		const updatedQuery =
 			opts?.emitEvents !== false
 				? await emitter.emitFilter(
-						this.eventScope === 'items'
-							? ['items.query', `${this.collection}.items.query`]
-							: `${this.eventScope}.query`,
-						query,
-						{
-							collection: this.collection,
-						},
-						{
-							database: this.knex,
-							schema: this.schema,
-							accountability: this.accountability,
-						},
-				  )
+					this.eventScope === 'items'
+						? ['items.query', `${this.collection}.items.query`]
+						: `${this.eventScope}.query`,
+					query,
+					{
+						collection: this.collection,
+					},
+					{
+						database: this.knex,
+						schema: this.schema,
+						accountability: this.accountability,
+					},
+				)
 				: query;
 
 		let ast = await getASTFromQuery(this.collection, updatedQuery, this.schema, {
@@ -428,11 +437,8 @@ export class ItemsService<Item extends AnyItem = AnyItem> implements AbstractSer
 		});
 
 		if (this.accountability && this.accountability.admin !== true) {
-			const authorizationService = new AuthorizationService({
-				accountability: this.accountability,
-				knex: this.knex,
-				schema: this.schema,
-			});
+			// Solves the problem of circular dependency
+			const authorizationService = await this.getAuthorizationService();
 
 			ast = await authorizationService.processAST(ast, opts?.permissionsAction);
 		}
@@ -450,18 +456,18 @@ export class ItemsService<Item extends AnyItem = AnyItem> implements AbstractSer
 		const filteredRecords =
 			opts?.emitEvents !== false
 				? await emitter.emitFilter(
-						this.eventScope === 'items' ? ['items.read', `${this.collection}.items.read`] : `${this.eventScope}.read`,
-						records,
-						{
-							query: updatedQuery,
-							collection: this.collection,
-						},
-						{
-							database: this.knex,
-							schema: this.schema,
-							accountability: this.accountability,
-						},
-				  )
+					this.eventScope === 'items' ? ['items.read', `${this.collection}.items.read`] : `${this.eventScope}.read`,
+					records,
+					{
+						query: updatedQuery,
+						collection: this.collection,
+					},
+					{
+						database: this.knex,
+						schema: this.schema,
+						accountability: this.accountability,
+					},
+				)
 				: records;
 
 		if (opts?.emitEvents !== false) {
@@ -607,31 +613,28 @@ export class ItemsService<Item extends AnyItem = AnyItem> implements AbstractSer
 		const payload: Partial<AnyItem> = cloneDeep(data);
 		const nestedActionEvents: ActionEventParams[] = [];
 
-		const authorizationService = new AuthorizationService({
-			accountability: this.accountability,
-			knex: this.knex,
-			schema: this.schema,
-		});
+		// Solves the problem of circular dependency
+		const authorizationService = await this.getAuthorizationService();
 
 		// Run all hooks that are attached to this event so the end user has the chance to augment the
 		// item that is about to be saved
 		const payloadAfterHooks =
 			opts.emitEvents !== false
 				? await emitter.emitFilter(
-						this.eventScope === 'items'
-							? ['items.update', `${this.collection}.items.update`]
-							: `${this.eventScope}.update`,
-						payload,
-						{
-							keys,
-							collection: this.collection,
-						},
-						{
-							database: this.knex,
-							schema: this.schema,
-							accountability: this.accountability,
-						},
-				  )
+					this.eventScope === 'items'
+						? ['items.update', `${this.collection}.items.update`]
+						: `${this.eventScope}.update`,
+					payload,
+					{
+						keys,
+						collection: this.collection,
+					},
+					{
+						database: this.knex,
+						schema: this.schema,
+						accountability: this.accountability,
+					},
+				)
 				: payload;
 
 		// Sort keys to ensure that the order is maintained
@@ -641,9 +644,13 @@ export class ItemsService<Item extends AnyItem = AnyItem> implements AbstractSer
 			await authorizationService.checkAccess('update', this.collection, keys);
 		}
 
-		const payloadWithPresets = this.accountability
-			? authorizationService.validatePayload('update', this.collection, payloadAfterHooks)
-			: payloadAfterHooks;
+		let payloadWithPresets = (
+			this.accountability
+				? await authorizationService.validatePayload('update', this.collection, payloadAfterHooks, keys)
+				: [{ keys, payload: payloadAfterHooks }]
+		) as Array<PayloadChunk>;
+
+		payloadWithPresets = Array.isArray(payloadWithPresets) ? payloadWithPresets : [payloadWithPresets];
 
 		if (opts.preMutationError) {
 			throw opts.preMutationError;
@@ -656,107 +663,109 @@ export class ItemsService<Item extends AnyItem = AnyItem> implements AbstractSer
 				schema: this.schema,
 			});
 
-			const {
-				payload: payloadWithM2O,
-				revisions: revisionsM2O,
-				nestedActionEvents: nestedActionEventsM2O,
-			} = await payloadService.processM2O(payloadWithPresets, opts);
+			for (const { keys, payload } of payloadWithPresets) {
+				const {
+					payload: payloadWithM2O,
+					revisions: revisionsM2O,
+					nestedActionEvents: nestedActionEventsM2O,
+				} = await payloadService.processM2O(payloadWithPresets, opts);
 
-			const {
-				payload: payloadWithA2O,
-				revisions: revisionsA2O,
-				nestedActionEvents: nestedActionEventsA2O,
-			} = await payloadService.processA2O(payloadWithM2O, opts);
+				const {
+					payload: payloadWithA2O,
+					revisions: revisionsA2O,
+					nestedActionEvents: nestedActionEventsA2O,
+				} = await payloadService.processA2O(payloadWithM2O, opts);
 
-			const payloadWithoutAliasAndPK = pick(payloadWithA2O, without(fields, primaryKeyField, ...aliases));
-			const payloadWithTypeCasting = await payloadService.processValues('update', payloadWithoutAliasAndPK);
+				const payloadWithoutAliasAndPK = pick(payloadWithA2O, without(fields, primaryKeyField, ...aliases));
+				const payloadWithTypeCasting = await payloadService.processValues('update', payloadWithoutAliasAndPK);
 
-			if (Object.keys(payloadWithTypeCasting).length > 0) {
-				try {
-					await trx(this.collection).update(payloadWithTypeCasting).whereIn(primaryKeyField, keys);
-				} catch (err: any) {
-					throw await translateDatabaseError(err);
+				if (Object.keys(payloadWithTypeCasting).length > 0) {
+					try {
+						await trx(this.collection).update(payloadWithTypeCasting).whereIn(primaryKeyField, keys);
+					} catch (err: any) {
+						throw await translateDatabaseError(err);
+					}
 				}
-			}
 
-			const childrenRevisions = [...revisionsM2O, ...revisionsA2O];
+				const childrenRevisions = [...revisionsM2O, ...revisionsA2O];
 
-			nestedActionEvents.push(...nestedActionEventsM2O);
-			nestedActionEvents.push(...nestedActionEventsA2O);
+				nestedActionEvents.push(...nestedActionEventsM2O);
+				nestedActionEvents.push(...nestedActionEventsA2O);
 
-			for (const key of keys) {
-				const { revisions, nestedActionEvents: nestedActionEventsO2M } = await payloadService.processO2M(
-					payloadWithA2O,
-					key,
-					opts,
-				);
+				for (const key of keys) {
+					const { revisions, nestedActionEvents: nestedActionEventsO2M } = await payloadService.processO2M(
+						payload,
+						key,
+						opts,
+					);
 
-				childrenRevisions.push(...revisions);
-				nestedActionEvents.push(...nestedActionEventsO2M);
-			}
+					childrenRevisions.push(...revisions);
+					nestedActionEvents.push(...nestedActionEventsO2M);
+				}
 
-			// If this is an authenticated action, and accountability tracking is enabled, save activity row
-			if (this.accountability && this.schema.collections[this.collection]!.accountability !== null) {
-				const activityService = new ActivityService({
-					knex: trx,
-					schema: this.schema,
-				});
-
-				const activity = await activityService.createMany(
-					keys.map((key) => ({
-						action: Action.UPDATE,
-						user: this.accountability!.user,
-						collection: this.collection,
-						ip: this.accountability!.ip,
-						user_agent: this.accountability!.userAgent,
-						origin: this.accountability!.origin,
-						item: key,
-					})),
-					{ bypassLimits: true },
-				);
-
-				if (this.schema.collections[this.collection]!.accountability === 'all') {
-					const itemsService = new ItemsService(this.collection, {
+				// If this is an authenticated action, and accountability tracking is enabled, save activity row
+				if (this.accountability && this.schema.collections[this.collection]!.accountability !== null) {
+					const activityService = new ActivityService({
 						knex: trx,
 						schema: this.schema,
 					});
 
-					const snapshots = await itemsService.readMany(keys);
+					const activity = await activityService.createMany(
+						keys.map((key) => ({
+							action: Action.UPDATE,
+							user: this.accountability!.user,
+							collection: this.collection,
+							ip: this.accountability!.ip,
+							user_agent: this.accountability!.userAgent,
+							origin: this.accountability!.origin,
+							item: key,
+						})),
+						{ bypassLimits: true },
+					);
 
-					const revisionsService = new RevisionsService({
-						knex: trx,
-						schema: this.schema,
-					});
+					if (this.schema.collections[this.collection]!.accountability === 'all') {
+						const itemsService = new ItemsService(this.collection, {
+							knex: trx,
+							schema: this.schema,
+						});
 
-					const revisions = (
-						await Promise.all(
-							activity.map(async (activity, index) => ({
-								activity: activity,
-								collection: this.collection,
-								item: keys[index],
-								data:
-									snapshots && Array.isArray(snapshots) ? JSON.stringify(snapshots[index]) : JSON.stringify(snapshots),
-								delta: await payloadService.prepareDelta(payloadWithTypeCasting),
-							})),
-						)
-					).filter((revision) => revision.delta);
+						const snapshots = await itemsService.readMany(keys);
 
-					const revisionIDs = await revisionsService.createMany(revisions);
+						const revisionsService = new RevisionsService({
+							knex: trx,
+							schema: this.schema,
+						});
 
-					for (let i = 0; i < revisionIDs.length; i++) {
-						const revisionID = revisionIDs[i]!;
+						const revisions = (
+							await Promise.all(
+								activity.map(async (activity, index) => ({
+									activity: activity,
+									collection: this.collection,
+									item: keys[index],
+									data:
+										snapshots && Array.isArray(snapshots) ? JSON.stringify(snapshots[index]) : JSON.stringify(snapshots),
+									delta: await payloadService.prepareDelta(payloadWithTypeCasting),
+								})),
+							)
+						).filter((revision) => revision.delta);
 
-						if (opts.onRevisionCreate) {
-							opts.onRevisionCreate(revisionID);
-						}
+						const revisionIDs = await revisionsService.createMany(revisions);
 
-						if (i === 0) {
-							// In case of a nested relational creation/update in a updateMany, the nested m2o/a2o
-							// creation is only done once. We treat the first updated item as the "main" update,
-							// with all other revisions on the current level as regular "flat" updates, and
-							// nested revisions as children of this first "root" item.
-							if (childrenRevisions.length > 0) {
-								await revisionsService.updateMany(childrenRevisions, { parent: revisionID });
+						for (let i = 0; i < revisionIDs.length; i++) {
+							const revisionID = revisionIDs[i]!;
+
+							if (opts.onRevisionCreate) {
+								opts.onRevisionCreate(revisionID);
+							}
+
+							if (i === 0) {
+								// In case of a nested relational creation/update in a updateMany, the nested m2o/a2o
+								// creation is only done once. We treat the first updated item as the "main" update,
+								// with all other revisions on the current level as regular "flat" updates, and
+								// nested revisions as children of this first "root" item.
+								if (childrenRevisions.length > 0) {
+									await revisionsService.updateMany(childrenRevisions, { parent: revisionID });
+								}
 							}
 						}
 					}
@@ -899,11 +908,8 @@ export class ItemsService<Item extends AnyItem = AnyItem> implements AbstractSer
 		validateKeys(this.schema, this.collection, primaryKeyField, keys);
 
 		if (this.accountability && this.accountability.admin !== true) {
-			const authorizationService = new AuthorizationService({
-				accountability: this.accountability,
-				schema: this.schema,
-				knex: this.knex,
-			});
+			// Solves the problem of circular dependency
+			const authorizationService = await this.getAuthorizationService();
 
 			await authorizationService.checkAccess('delete', this.collection, keys);
 		}
