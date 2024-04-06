@@ -1,5 +1,5 @@
 import { REGEX_BETWEEN_PARENS } from '@directus/constants';
-import type { Accountability, Filter, Role, User } from '@directus/types';
+import type { Accountability, Filter, Item, Role, User } from '@directus/types';
 import { isObjectLike } from 'lodash-es';
 import { adjustDate } from './adjust-date.js';
 import { deepMap } from './deep-map.js';
@@ -9,10 +9,11 @@ import { isObject } from './is-object.js';
 import { parseJSON } from './parse-json.js';
 import { toArray } from './to-array.js';
 
-type ParseFilterContext = {
+export type ParseFilterContext = {
 	// The user can add any custom fields to user
 	$CURRENT_USER?: User & Record<string, any>;
 	$CURRENT_ROLE?: Role & Record<string, any>;
+	$CURRENT_ITEM?: Item;
 };
 
 export function parseFilter(
@@ -149,6 +150,10 @@ function parseDynamicVariable(value: any, accountability: Accountability | null,
 
 	if (value.startsWith('$CURRENT_ROLE')) {
 		if (value === '$CURRENT_ROLE') return accountability?.role ?? null;
+		return get(context, value, null);
+	}
+
+	if (value.startsWith('$CURRENT_ITEM')) {
 		return get(context, value, null);
 	}
 }
