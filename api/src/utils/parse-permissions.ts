@@ -15,8 +15,6 @@ export function parsePermissions(permissions: any[]) {
 
 		if (permission.permissions && typeof permission.permissions === 'string') {
 			permission.permissions = parseJSON(permission.permissions);
-		} else if (permission.permissions === null) {
-			permission.permissions = {};
 		}
 
 		if (permission.validation && typeof permission.validation === 'string') {
@@ -47,7 +45,7 @@ export function parsePermissions(permissions: any[]) {
 				requiredPermissionData.$CURRENT_ROLE.push(val.replace('$CURRENT_ROLE.', ''));
 				containDynamicData = true;
 			}
-
+			
 			if (typeof val === 'string' && val.startsWith('$CURRENT_ITEM.')) {
 				requiredPermissionData.$CURRENT_ITEM.push(val.replace('$CURRENT_ITEM.', ''));
 				containDynamicData = true;

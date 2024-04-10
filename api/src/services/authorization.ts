@@ -523,18 +523,12 @@ export class AuthorizationService {
 			.map((field) => field.validation)
 			.filter((v) => v) as Filter[];
 
-		if (fieldValidationRules?.length > 0) {
-			if (permission.validation && Object.keys(permission.validation).length > 0) {
-				permission.validation = { _and: [permission.validation, ...fieldValidationRules] };
-			} else {
-				permission.validation = { _and: fieldValidationRules };
-			}
-		}
-
-		let hasValidationRules =
+		const hasValidationRules =
 			isNil(permission.validation) === false && Object.keys(permission.validation ?? {}).length > 0;
 
-		permission.validation = hasValidationRules ? { _and: [permission.validation!] } : { _and: [] };
+		const hasFieldValidationRules = fieldValidationRules && fieldValidationRules.length > 0;
+
+		const requiredColumns: SchemaOverview['collections'][string]['fields'][string][] = [];
 
 		for (const field of Object.values(this.schema.collections[collection]!.fields)) {
 			const specials = field?.special ?? [];
@@ -544,6 +538,14 @@ export class AuthorizationService {
 			const nullable = field.nullable || hasGenerateSpecial || field.generated;
 
 			if (!nullable) {
+				requiredColumns.push(field);
+			}
+		}
+
+		if (requiredColumns.length > 0) {
+			permission.validation = hasValidationRules ? { _and: [permission.validation!] } : { _and: [] };
+
+			for (const field of requiredColumns) {
 				if (action === 'create' && field.defaultValue === null) {
 					permission.validation._and.push({
 						[field.field]: {
@@ -557,8 +559,14 @@ export class AuthorizationService {
 						_nnull: true,
 					},
 				});
+			}
+		}
 
-				hasValidationRules = true;
+		if (hasFieldValidationRules) {
+			if (permission.validation && Object.keys(permission.validation).length > 0) {
+				permission.validation = { _and: [permission.validation, ...fieldValidationRules] };
+			} else {
+				permission.validation = { _and: fieldValidationRules };
 			}
 		}
 
@@ -584,7 +592,7 @@ export class AuthorizationService {
 				? await getFilterContext(this.schema, this.accountability, requiredPermissionData)
 				: {};
 
-		
+
 		const payloadFields = Object.keys(payload);
 		const itemContextFields = requiredPermissionData.$CURRENT_ITEM.filter(
 			(field: string) => !payloadFields.includes(field)
@@ -596,7 +604,7 @@ export class AuthorizationService {
 				[pkField]: '+',
 			},
 		];
-		
+
 		if (pk) {
 			if (!includesPK) {
 				itemContextFields.push(pkField);
@@ -618,16 +626,16 @@ export class AuthorizationService {
 			// If no validation is required, simply return null
 			const validate = hasValidationRules
 				? function (payloadWithPreset: Record<string, any>) {
-						validationErrors.push(
-							...flatten(
-								validatePayload(validationFilter, payloadWithPreset).map((error) =>
-									error.details.map((details) => new FailedValidationError(joiValidationErrorItemToErrorExtensions(details)).extensions)
-								)
+					validationErrors.push(
+						...flatten(
+							validatePayload(validationFilter, payloadWithPreset).map((error) =>
+								error.details.map((details) => new FailedValidationError(joiValidationErrorItemToErrorExtensions(details)).extensions)
 							)
-						);
+						)
+					);
 
-						if (validationErrors.length > 0) throw validationErrors;
-				  }
+					if (validationErrors.length > 0) throw validationErrors;
+				}
 				: () => null;
 
 			const preset = parsePreset(permission.presets ?? {}, this.accountability, context);
@@ -656,10 +664,16 @@ export class AuthorizationService {
 				validate(chunks[key]!.payload);
 			}
 		});
+		/*
+		const preset = permission.presets ?? {};
 
+		const payloadWithPresets = merge({}, preset, data);
+		if (hasValidationRules === false && hasFieldValidationRules === false && requiredColumns.length === 0) {
+			return payloadWithPresets;
+		}*/
 		const payloadWithPresets = Object.values(chunks);
-		
-		return Array.isArray(payloadWithPresets) ? payloadWithPresets : payloadWithPresets[0];
+
+		return Array.isArray(pk) ? payloadWithPresets : payloadWithPresets[0]!;
 	}
 
 	getItemsContext(

@@ -25,8 +25,13 @@ export async function getItemsContext(
 		limit: pk.length,
 	};
 
-	const result = await itemsService.readMany(pk, query, { permissionsAction: action });
-	if (result?.length !== pk.length) throw new ForbiddenError();
+	let result = await itemsService.readMany(pk, query, { permissionsAction: action });
+
+	if (!result || Object.keys(result).length === 0) {
+        result = []
+    }
+
+	if (result.length > 0 && result.length !== pk.length) throw new ForbiddenError();
 
 	return result;
 }
