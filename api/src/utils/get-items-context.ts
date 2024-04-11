@@ -12,6 +12,7 @@ export async function getItemsContext(
 	action: PermissionsAction,
 	collection: string,
 	pk: PrimaryKey | PrimaryKey[],
+	pkField: string = 'id',
 	fields: string[] = ['*']
 ): Promise<Array<Item>> {
 	const itemsService = new ItemsService(collection, context);
@@ -27,11 +28,16 @@ export async function getItemsContext(
 
 	let result = await itemsService.readMany(pk, query, { permissionsAction: action });
 
-	if (!result || Object.keys(result).length === 0) {
-        result = []
+	if (!result || Object.keys(result).length === 0 ) {
+		result = []
+        pk.forEach((currentPk)=>{
+			result.push({
+				[pkField]: currentPk,
+			})
+		})
     }
 
-	if (result.length > 0 && result.length !== pk.length) throw new ForbiddenError();
+	if (result.length !== pk.length) throw new ForbiddenError();
 
 	return result;
 }

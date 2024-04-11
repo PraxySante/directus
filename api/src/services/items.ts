@@ -647,7 +647,7 @@ export class ItemsService<Item extends AnyItem = AnyItem> implements AbstractSer
 		let payloadWithPresets = (
 			this.accountability
 				? await authorizationService.validatePayload('update', this.collection, payloadAfterHooks, keys)
-				: [{ keys, payload: payloadAfterHooks }]
+				: [{ keys, payload: payloadAfterHooks } ]
 		) as Array<PayloadChunk>;
 
 		payloadWithPresets = Array.isArray(payloadWithPresets) ? payloadWithPresets : [payloadWithPresets];
@@ -668,7 +668,7 @@ export class ItemsService<Item extends AnyItem = AnyItem> implements AbstractSer
 					payload: payloadWithM2O,
 					revisions: revisionsM2O,
 					nestedActionEvents: nestedActionEventsM2O,
-				} = await payloadService.processM2O(payloadWithPresets, opts);
+				} = await payloadService.processM2O(payload, opts);
 
 				const {
 					payload: payloadWithA2O,

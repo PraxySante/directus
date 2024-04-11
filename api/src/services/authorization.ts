@@ -610,8 +610,8 @@ export class AuthorizationService {
 				itemContextFields.push(pkField);
 			}
 
-			itemContexts = await this.getItemsContext(action, collection, pk, itemContextFields);
-
+			itemContexts = await this.getItemsContext(action, collection, pk, pkField, itemContextFields);
+			
 			// Remove pk field so we don't check it during hashing later on
 			itemContextFields.splice(itemContextFields.indexOf(pkField), 1);
 		}
@@ -680,17 +680,19 @@ export class AuthorizationService {
 		action: PermissionsAction,
 		collection: string,
 		pk: PrimaryKey | PrimaryKey[],
+		pkField :string,
 		fields: string[] = ['*']
 	): Promise<Array<Item>> {
 		return getItemsContext(
 			{
 				schema: this.schema,
-				accountability: null,
+				accountability: this.accountability,
 				knex: this.knex,
 			},
 			action,
 			collection,
 			pk,
+			pkField,
 			fields
 		);
 	}
