@@ -195,6 +195,7 @@ export class OpenIDAuthDriver extends LocalAuthDriver {
 		// PRAXYSANTE MODIF : Add psc_access_token into directus_users table necessary to start efficience
 		const pscAccessToken = userInfo['psc_access_token'] ? String(userInfo['psc_access_token']) : undefined;
 		const pscRefreshToken = userInfo['psc_refresh_token'] ? String(userInfo['psc_refresh_token']) : undefined;
+		console.log(userInfo);
 
 		const userPayload = {
 			provider,
