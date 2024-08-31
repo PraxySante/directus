@@ -160,7 +160,8 @@ export class UsersService extends ItemsService {
 		try {
 			if ('email' in data) {
 				this.validateEmail(data['email']);
-				await this.checkUniqueEmails([data['email']]);
+				// PRAXYSANTE MODIF : Emails does not need to be unique. Email linking is managed by Auth0
+				// await this.checkUniqueEmails([data['email']]);
 			}
 
 			if ('password' in data) {
@@ -240,7 +241,8 @@ export class UsersService extends ItemsService {
 				}
 
 				this.validateEmail(data['email']);
-				await this.checkUniqueEmails([data['email']], keys[0]);
+				//PRAXYSANTE MODIF : Email does not need to be unique. Email linking is managed by Auth0
+				//await this.checkUniqueEmails([data['email']], keys[0]);
 			}
 
 			if (data['password']) {
