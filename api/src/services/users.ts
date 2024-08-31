@@ -39,6 +39,7 @@ export class UsersService extends ItemsService {
 	 * User email has to be unique case-insensitive. This is an additional check to make sure that
 	 * the email is unique regardless of casing
 	 */
+	/*
 	private async checkUniqueEmails(emails: string[], excludeKey?: PrimaryKey): Promise<void> {
 		emails = emails.map((email) => email.toLowerCase());
 
@@ -69,6 +70,7 @@ export class UsersService extends ItemsService {
 			});
 		}
 	}
+	*/
 
 	/**
 	 * Check if the provided password matches the strictness as configured in
