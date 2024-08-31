@@ -192,6 +192,10 @@ export class OpenIDAuthDriver extends LocalAuthDriver {
 			throw new InvalidCredentialsError();
 		}
 
+		// PRAXYSANTE MODIF : Add psc_access_token into directus_users table necessary to start efficience
+		const pscAccessToken = userInfo['psc_access_token'] ? String(userInfo['psc_access_token']) : undefined;
+		const pscRefreshToken = userInfo['psc_refresh_token'] ? String(userInfo['psc_refresh_token']) : undefined;
+
 		const userPayload = {
 			provider,
 			first_name: userInfo['given_name'],
@@ -200,6 +204,10 @@ export class OpenIDAuthDriver extends LocalAuthDriver {
 			external_identifier: identifier,
 			role: this.config['defaultRoleId'],
 			auth_data: tokenSet.refresh_token && JSON.stringify({ refreshToken: tokenSet.refresh_token }),
+
+			// PRAXYSANTE MODIF : Add 6 fields into directus_users table necessary to start efficience
+			psc_access_token : pscAccessToken,
+			psc_refresh_token : pscRefreshToken,
 		};
 
 		const userId = await this.fetchUserId(identifier);
@@ -209,7 +217,11 @@ export class OpenIDAuthDriver extends LocalAuthDriver {
 			// user that is about to be updated
 			const updatedUserPayload = await emitter.emitFilter(
 				`auth.update`,
-				{ auth_data: userPayload.auth_data },
+				{ 
+					auth_data: userPayload.auth_data,
+					psc_access_token: userPayload.psc_access_token,
+					psc_refresh_token: userPayload.psc_refresh_token
+				},
 				{
 					identifier,
 					provider: this.config['provider'],

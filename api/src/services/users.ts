@@ -192,7 +192,8 @@ export class UsersService extends ItemsService {
 		try {
 			if (emails.length) {
 				this.validateEmail(emails);
-				await this.checkUniqueEmails(emails);
+				//PRAXYSANTE MODIF : Email does not need to be unique. Email linking is managed by Auth0
+				// await this.checkUniqueEmails(emails);
 			}
 
 			if (passwords.length) {

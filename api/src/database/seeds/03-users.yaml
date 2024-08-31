@@ -11,11 +11,20 @@ columns:
   last_name:
     type: string
     length: 50
+#   PRAXYSANTE MODIF : EMAIL DOES NOT NEED TO BE UNIQUE
   email:
     type: string
     length: 128
-    nullable: false
-    unique: true
+#   unique: true 
+#   nullable: false
+#   PRAXYSANTE MODIF : EMAIL DOES NOT NEED TO BE UNIQUE
+  psc_access_token:
+    type: string
+    length: 256
+  psc_refresh_token:
+    type: string
+    length: 256
+#   END PRAXYSANTE MODIF
   password:
     type: string
     length: 255
