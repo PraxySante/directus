@@ -139,8 +139,12 @@ export class UsersService extends ItemsService {
 	 * Validate array of emails. Intended to be used with create/update users
 	 */
 	private validateEmail(input: string | string[]) {
-		const emails = Array.isArray(input) ? input : [input];
+		input
 
+		// PRAXYSANTE MODIF : Emails does not need to be validated. Email linking is managed by Auth0
+		/*
+		const emails = Array.isArray(input) ? input : [input];
+		
 		const schema = Joi.string().email().required();
 
 		for (const email of emails) {
@@ -153,6 +157,7 @@ export class UsersService extends ItemsService {
 				});
 			}
 		}
+		*/
 	}
 
 	/**
