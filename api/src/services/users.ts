@@ -3,7 +3,7 @@ import { ForbiddenError, InvalidPayloadError, RecordNotUniqueError } from '@dire
 import type { Item, PrimaryKey, RegisterUserInput, User } from '@directus/types';
 import { getSimpleHash, toArray, validatePayload } from '@directus/utils';
 import { FailedValidationError, joiValidationErrorItemToErrorExtensions } from '@directus/validation';
-import Joi from 'joi';
+//import Joi from 'joi';
 import jwt from 'jsonwebtoken';
 import { isEmpty } from 'lodash-es';
 import { performance } from 'perf_hooks';
