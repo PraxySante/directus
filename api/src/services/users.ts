@@ -110,6 +110,21 @@ export class UsersService extends ItemsService {
 	}
 
 	/**
+	 * Clear users' sessions to log them out
+	 */
+	private async clearUserSessions(userKeys: PrimaryKey[], excludeSession?: string): Promise<void> {
+		if (excludeSession) {
+			await this.knex
+				.from('directus_sessions')
+				.whereIn('user', userKeys)
+				.andWhereNot('token', '=', excludeSession)
+				.delete();
+		} else {
+			await this.knex.from('directus_sessions').whereIn('user', userKeys).delete();
+		}
+	}
+
+	/**
 	 * Get basic information of user identified by email
 	 */
 	private async getUserByEmail(
@@ -128,7 +143,10 @@ export class UsersService extends ItemsService {
 	private inviteUrl(email: string, url: string | null): string {
 		const payload = { email, scope: 'invite' };
 
-		const token = jwt.sign(payload, getSecret(), { expiresIn: '7d', issuer: 'directus' });
+		const token = jwt.sign(payload, getSecret(), {
+			expiresIn: env['USER_INVITE_TOKEN_TTL'] as string,
+			issuer: 'directus',
+		});
 
 		return (url ? new Url(url) : new Url(env['PUBLIC_URL'] as string).addPath('admin', 'accept-invite'))
 			.setQuery('token', token)
@@ -165,7 +183,7 @@ export class UsersService extends ItemsService {
 	 */
 	override async createOne(data: Partial<Item>, opts: MutationOptions = {}): Promise<PrimaryKey> {
 		try {
-			if ('email' in data) {
+			if ('email' in data && data['email'] !== undefined) {
 				this.validateEmail(data['email']);
 				// PRAXYSANTE MODIF : Emails does not need to be unique. Email linking is managed by Auth0
 				// await this.checkUniqueEmails([data['email']]);
@@ -299,6 +317,12 @@ export class UsersService extends ItemsService {
 
 		const result = await super.updateMany(keys, data, opts);
 
+		if (data['status'] !== undefined && data['status'] !== 'active') {
+			await this.clearUserSessions(keys);
+		} else if (data['password'] !== undefined || data['email'] !== undefined) {
+			await this.clearUserSessions(keys, this.accountability?.session);
+		}
+
 		// Only clear the caches if the role has been updated
 		if ('role' in data) {
 			await this.clearCaches(opts);
@@ -322,10 +346,13 @@ export class UsersService extends ItemsService {
 		}
 
 		// Manual constraint, see https://github.com/directus/directus/pull/19912
+		await this.knex('directus_comments').update({ user_updated: null }).whereIn('user_updated', keys);
 		await this.knex('directus_notifications').update({ sender: null }).whereIn('sender', keys);
 		await this.knex('directus_versions').update({ user_updated: null }).whereIn('user_updated', keys);
 
 		await super.deleteMany(keys, opts);
+		await this.clearUserSessions(keys);
+
 		return keys;
 	}
 
@@ -576,7 +603,7 @@ export class UsersService extends ItemsService {
 	}
 
 	async resetPassword(token: string, password: string): Promise<void> {
-		const { email, scope, hash } = jwt.verify(token, getSecret(), { issuer: 'directus' }) as {
+		const { email, scope, hash } = verifyJWT(token, getSecret()) as {
 			email: string;
 			scope: string;
 			hash: string;

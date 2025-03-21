@@ -21,6 +21,9 @@ import { getSchema } from '../utils/get-schema.js';
 import { shouldClearCache } from '../utils/should-clear-cache.js';
 import { transaction } from '../utils/transaction.js';
 import { FieldsService } from './fields.js';
+import { buildCollectionAndFieldRelations } from './fields/build-collection-and-field-relations.js';
+import { getCollectionMetaUpdates } from './fields/get-collection-meta-updates.js';
+import { getCollectionRelationList } from './fields/get-collection-relation-list.js';
 import { ItemsService } from './items.js';
 
 export type RawCollection = {
@@ -129,7 +132,7 @@ export class CollectionsService {
 					await trx.schema.createTable(payload.collection, (table) => {
 						for (const field of payload.fields!) {
 							if (field.type && ALIAS_TYPES.includes(field.type) === false) {
-								fieldsService.addColumnToTable(table, field);
+								fieldsService.addColumnToTable(table, payload.collection, field);
 							}
 						}
 					});
@@ -173,13 +176,13 @@ export class CollectionsService {
 				}
 
 				if (payload.meta) {
-					const collectionItemsService = new ItemsService('directus_collections', {
+					const collectionsItemsService = new ItemsService('directus_collections', {
 						knex: trx,
 						accountability: this.accountability,
 						schema: this.schema,
 					});
 
-					await collectionItemsService.createOne(
+					await collectionsItemsService.createOne(
 						{
 							...payload.meta,
 							collection: payload.collection,
@@ -271,7 +274,7 @@ export class CollectionsService {
 	async readByQuery(): Promise<Collection[]> {
 		const env = useEnv();
 
-		const collectionItemsService = new ItemsService('directus_collections', {
+		const collectionsItemsService = new ItemsService('directus_collections', {
 			knex: this.knex,
 			schema: this.schema,
 			accountability: this.accountability,
@@ -279,7 +282,7 @@ export class CollectionsService {
 
 		let tablesInDatabase = await this.schemaInspector.tableInfo();
 
-		let meta = (await collectionItemsService.readByQuery({
+		let meta = (await collectionsItemsService.readByQuery({
 			limit: -1,
 		})) as BaseCollectionMeta[];
 
@@ -378,6 +381,7 @@ export class CollectionsService {
 							accountability: this.accountability!,
 							action: 'read',
 							collection,
+							skipCollectionExistsCheck: true,
 						},
 						{
 							schema: this.schema,
@@ -403,7 +407,7 @@ export class CollectionsService {
 		const nestedActionEvents: ActionEventParams[] = [];
 
 		try {
-			const collectionItemsService = new ItemsService('directus_collections', {
+			const collectionsItemsService = new ItemsService('directus_collections', {
 				knex: this.knex,
 				accountability: this.accountability,
 				schema: this.schema,
@@ -422,13 +426,13 @@ export class CollectionsService {
 				.first());
 
 			if (exists) {
-				await collectionItemsService.updateOne(collectionKey, payload.meta, {
+				await collectionsItemsService.updateOne(collectionKey, payload.meta, {
 					...opts,
 					bypassEmitAction: (params) =>
 						opts?.bypassEmitAction ? opts.bypassEmitAction(params) : nestedActionEvents.push(params),
 				});
 			} else {
-				await collectionItemsService.createOne(
+				await collectionsItemsService.createOne(
 					{ ...payload.meta, collection: collectionKey },
 					{
 						...opts,
@@ -597,13 +601,13 @@ export class CollectionsService {
 				await trx('directus_collections').update({ group: null }).where({ group: collectionKey });
 
 				if (collectionToBeDeleted!.meta) {
-					const collectionItemsService = new ItemsService('directus_collections', {
+					const collectionsItemsService = new ItemsService('directus_collections', {
 						knex: trx,
 						accountability: this.accountability,
 						schema: this.schema,
 					});
 
-					await collectionItemsService.deleteOne(collectionKey, {
+					await collectionsItemsService.deleteOne(collectionKey, {
 						bypassEmitAction: (params) =>
 							opts?.bypassEmitAction ? opts.bypassEmitAction(params) : nestedActionEvents.push(params),
 					});
@@ -616,7 +620,24 @@ export class CollectionsService {
 						schema: this.schema,
 					});
 
-					await trx('directus_fields').delete().where('collection', '=', collectionKey);
+					const fieldItemsService = new ItemsService('directus_fields', {
+						knex: trx,
+						accountability: this.accountability,
+						schema: this.schema,
+					});
+
+					await fieldItemsService.deleteByQuery(
+						{
+							filter: {
+								collection: { _eq: collectionKey },
+							},
+						},
+						{
+							bypassEmitAction: (params) =>
+								opts?.bypassEmitAction ? opts.bypassEmitAction(params) : nestedActionEvents.push(params),
+						},
+					);
+
 					await trx('directus_presets').delete().where('collection', '=', collectionKey);
 
 					const revisionsToDelete = await trx
@@ -640,6 +661,37 @@ export class CollectionsService {
 					await trx('directus_activity').delete().where('collection', '=', collectionKey);
 					await trx('directus_permissions').delete().where('collection', '=', collectionKey);
 					await trx('directus_relations').delete().where({ many_collection: collectionKey });
+
+					const { collectionRelationTree, fieldToCollectionList } = await buildCollectionAndFieldRelations(
+						this.schema.relations,
+					);
+
+					const collectionRelationList = getCollectionRelationList(collectionKey, collectionRelationTree);
+
+					// only process duplication fields if related collections have them
+					if (collectionRelationList.size !== 0) {
+						const collectionMetas = await trx
+							.select('collection', 'archive_field', 'sort_field', 'item_duplication_fields')
+							.from('directus_collections')
+							.whereIn('collection', Array.from(collectionRelationList))
+							.whereNotNull('item_duplication_fields');
+
+						await Promise.all(
+							Object.keys(this.schema.collections[collectionKey]?.fields ?? {}).map(async (fieldKey) => {
+								const collectionMetaUpdates = getCollectionMetaUpdates(
+									collectionKey,
+									fieldKey,
+									collectionMetas,
+									this.schema.collections,
+									fieldToCollectionList,
+								);
+
+								for (const meta of collectionMetaUpdates) {
+									await trx('directus_collections').update(meta.updates).where({ collection: meta.collection });
+								}
+							}),
+						);
+					}
 
 					const relations = this.schema.relations.filter((relation) => {
 						return relation.collection === collectionKey || relation.related_collection === collectionKey;

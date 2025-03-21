@@ -600,9 +600,6 @@ export class ItemsService<Item extends AnyItem = AnyItem, Collection extends str
 	async updateByQuery(query: Query, data: Partial<Item>, opts?: MutationOptions): Promise<PrimaryKey[]> {
 		const keys = await this.getKeysByQuery(query);
 
-		const primaryKeyField = this.schema.collections[this.collection]!.primary;
-		validateKeys(this.schema, this.collection, primaryKeyField, keys);
-
 		return keys.length ? await this.updateMany(keys, data, opts) : [];
 	}
 
@@ -727,6 +724,7 @@ export class ItemsService<Item extends AnyItem = AnyItem, Collection extends str
 					action: 'update',
 					collection: this.collection,
 					primaryKeys: keys,
+					fields: Object.keys(payloadAfterHooks),
 				},
 				{
 					schema: this.schema,
@@ -948,7 +946,8 @@ export class ItemsService<Item extends AnyItem = AnyItem, Collection extends str
 				.first());
 
 		if (exists) {
-			return await this.updateOne(primaryKey as PrimaryKey, payload, opts);
+			const { [primaryKeyField]: _, ...data } = payload;
+			return await this.updateOne(primaryKey as PrimaryKey, data as Partial<Item>, opts);
 		} else {
 			return await this.createOne(payload, opts);
 		}
